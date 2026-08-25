@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/README.md"
+      - "**/LICENSE"
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "**/README.md"
+      - "**/LICENSE"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust 1.88
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup component add rustfmt clippy --toolchain 1.88.0
+          rustup default 1.88.0
+
+      - name: Verify versions and npm package graph
+        run: |
+          node --check npm/cybersearch-mcp/run.js
+          node --check scripts/sync-npm-version.mjs
+          node scripts/sync-npm-version.mjs --check
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --locked --all-targets --all-features
+
+      - name: Build stdio release binary
+        run: |
+          cargo build --locked --release
+          mkdir -p dist
+          cp target/release/cybersearch dist/cybersearch-stdio
+
+      - name: Build Streamable HTTP release binary
+        run: |
+          cargo build --locked --release --features http
+          cp target/release/cybersearch dist/cybersearch-http
+
+      - name: Upload main branch binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: cybersearch-main-${{ github.sha }}
+          path: |
+            dist/cybersearch-stdio
+            dist/cybersearch-http
+          if-no-files-found: error
+          retention-days: 7

@@ -1,0 +1,11 @@
+{
+  "name": "cybersearch-mcp-linux-x64",
+  "version": "0.0.1",
+  "description": "CyberSearch native binary for Linux x64",
+  "license": "MIT",
+  "os": ["linux"],
+  "cpu": ["x64"],
+  "files": ["bin/cybersearch", "LICENSE"],
+  "preferUnplugged": true,
+  "publishConfig": {"access": "public"}
+}

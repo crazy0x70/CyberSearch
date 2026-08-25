@@ -1,0 +1,49 @@
+{
+  "name": "cybersearch-mcp",
+  "version": "0.0.1",
+  "description": "Prebuilt CyberSearch MCP server for aggregated web search",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "search",
+    "tavily",
+    "exa",
+    "firecrawl",
+    "tinyfish",
+    "grok",
+    "gemini",
+    "rust"
+  ],
+  "bin": {
+    "cybersearch": "run.js",
+    "cybersearch-mcp": "run.js"
+  },
+  "files": [
+    "run.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "optionalDependencies": {
+    "cybersearch-mcp-darwin-x64": "0.0.1",
+    "cybersearch-mcp-darwin-arm64": "0.0.1",
+    "cybersearch-mcp-linux-x64": "0.0.1",
+    "cybersearch-mcp-linux-arm64": "0.0.1",
+    "cybersearch-mcp-win32-x64": "0.0.1",
+    "cybersearch-mcp-win32-arm64": "0.0.1"
+  }
+}

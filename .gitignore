@@ -1,0 +1,6 @@
+/target/
+/.cargo-home/
+.env
+.DS_Store
+*.log
+

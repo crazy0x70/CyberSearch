@@ -1,0 +1,320 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/README.md"
+      - "**/LICENSE"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      should_release: ${{ steps.version.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          test -n "$version"
+          tag="v$version"
+          node scripts/sync-npm-version.mjs "$version" --check
+
+          packages=(
+            cybersearch-mcp
+            cybersearch-mcp-darwin-x64
+            cybersearch-mcp-darwin-arm64
+            cybersearch-mcp-linux-x64
+            cybersearch-mcp-linux-arm64
+            cybersearch-mcp-win32-x64
+            cybersearch-mcp-win32-arm64
+          )
+
+          published=0
+          for package in "${packages[@]}"; do
+            if npm view "$package@$version" version --silent >/dev/null 2>&1; then
+              published=$((published + 1))
+            fi
+          done
+
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            && [ "$published" -eq "${#packages[@]}" ]; then
+            should_release=false
+          else
+            should_release=true
+          fi
+
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "should_release=$should_release" >> "$GITHUB_OUTPUT"
+          echo "release=$tag published_packages=$published/${#packages[@]} should_release=$should_release"
+
+      - name: Verify npm publishing credentials
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          test -n "$NODE_AUTH_TOKEN"
+          npm whoami
+
+      - name: Install Rust 1.88
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal
+          rustup component add rustfmt clippy --toolchain 1.88.0
+          rustup default 1.88.0
+
+      - name: Validate source
+        if: steps.version.outputs.should_release == 'true'
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked --all-targets --all-features -- -D warnings
+          cargo test --locked --all-targets --all-features
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.should_release == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x86_64
+            executable: cybersearch
+          - runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            platform: linux-aarch64
+            executable: cybersearch
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+            platform: macos-x86_64
+            executable: cybersearch
+          - runner: macos-15
+            target: aarch64-apple-darwin
+            platform: macos-aarch64
+            executable: cybersearch
+          - runner: windows-2025
+            target: x86_64-pc-windows-msvc
+            platform: windows-x86_64
+            executable: cybersearch.exe
+          - runner: windows-11-arm
+            target: aarch64-pc-windows-msvc
+            platform: windows-aarch64
+            executable: cybersearch.exe
+    runs-on: ${{ matrix.runner }}
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust 1.88
+        shell: bash
+        run: |
+          rustup toolchain install 1.88.0 --profile minimal --target "${{ matrix.target }}"
+          rustup default 1.88.0
+
+      - name: Build stdio binary
+        shell: bash
+        run: cargo build --locked --release --target "${{ matrix.target }}"
+
+      - name: Package stdio binary
+        shell: bash
+        run: |
+          package="cybersearch-${RELEASE_TAG}-${{ matrix.platform }}"
+          mkdir -p "dist/$package"
+          cp "target/${{ matrix.target }}/release/${{ matrix.executable }}" "dist/$package/"
+          cp README.md LICENSE "dist/$package/"
+          tar -C dist -czf "dist/$package.tar.gz" "$package"
+          rm -rf "dist/$package"
+
+      - name: Build Streamable HTTP binary
+        shell: bash
+        run: cargo build --locked --release --features http --target "${{ matrix.target }}"
+
+      - name: Package Streamable HTTP binary
+        shell: bash
+        run: |
+          package="cybersearch-http-${RELEASE_TAG}-${{ matrix.platform }}"
+          mkdir -p "dist/$package"
+          cp "target/${{ matrix.target }}/release/${{ matrix.executable }}" "dist/$package/"
+          cp README.md LICENSE "dist/$package/"
+          tar -C dist -czf "dist/$package.tar.gz" "$package"
+          rm -rf "dist/$package"
+
+      - name: Upload release archives
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.platform }}
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish-npm-platforms:
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - package_dir: linux-x64
+            release_platform: linux-x86_64
+            executable: cybersearch
+          - package_dir: linux-arm64
+            release_platform: linux-aarch64
+            executable: cybersearch
+          - package_dir: darwin-x64
+            release_platform: macos-x86_64
+            executable: cybersearch
+          - package_dir: darwin-arm64
+            release_platform: macos-aarch64
+            executable: cybersearch
+          - package_dir: win32-x64
+            release_platform: windows-x86_64
+            executable: cybersearch.exe
+          - package_dir: win32-arm64
+            release_platform: windows-aarch64
+            executable: cybersearch.exe
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-${{ matrix.release_platform }}
+          path: artifact
+
+      - name: Assemble platform npm package
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_dir="npm/platforms/${{ matrix.package_dir }}"
+          archive="artifact/cybersearch-${RELEASE_TAG}-${{ matrix.release_platform }}.tar.gz"
+          work="$(mktemp -d)"
+          tar -xzf "$archive" -C "$work"
+          source_binary="$(find "$work" -type f -name '${{ matrix.executable }}' -print -quit)"
+          test -n "$source_binary"
+          mkdir -p "$package_dir/bin"
+          cp "$source_binary" "$package_dir/bin/${{ matrix.executable }}"
+          chmod +x "$package_dir/bin/${{ matrix.executable }}"
+          cp LICENSE "$package_dir/LICENSE"
+          rm -rf "$work"
+          node scripts/sync-npm-version.mjs "$RELEASE_VERSION"
+
+      - name: Inspect and publish platform npm package
+        working-directory: npm/platforms/${{ matrix.package_dir }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          package="$(node -p 'require("./package.json").name')"
+          npm pack --dry-run
+          if npm view "$package@$RELEASE_VERSION" version --silent >/dev/null 2>&1; then
+            echo "$package@$RELEASE_VERSION already published"
+          else
+            npm publish --access public
+          fi
+
+  publish-npm:
+    needs:
+      - prepare
+      - publish-npm-platforms
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Synchronize npm package versions
+        run: |
+          node scripts/sync-npm-version.mjs "$RELEASE_VERSION"
+          node scripts/sync-npm-version.mjs "$RELEASE_VERSION" --check
+
+      - name: Inspect and publish main npm package
+        working-directory: npm/cybersearch-mcp
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --dry-run
+          if npm view "cybersearch-mcp@$RELEASE_VERSION" version --silent >/dev/null 2>&1; then
+            echo "cybersearch-mcp@$RELEASE_VERSION already published"
+          else
+            npm publish --access public
+          fi
+
+  publish-release:
+    needs:
+      - prepare
+      - build
+      - publish-npm
+    if: needs.prepare.outputs.should_release == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist
+        run: sha256sum *.tar.gz > SHA256SUMS
+
+      - name: Publish GitHub Release and tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$RELEASE_TAG" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --generate-notes \
+              --title "CyberSearch $RELEASE_TAG"
+          fi

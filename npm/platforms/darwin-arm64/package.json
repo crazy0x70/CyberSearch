@@ -1,0 +1,11 @@
+{
+  "name": "cybersearch-mcp-darwin-arm64",
+  "version": "0.0.1",
+  "description": "CyberSearch native binary for macOS arm64",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "files": ["bin/cybersearch", "LICENSE"],
+  "preferUnplugged": true,
+  "publishConfig": {"access": "public"}
+}
