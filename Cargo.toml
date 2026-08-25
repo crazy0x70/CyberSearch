@@ -1,12 +1,12 @@
 [package]
 name = "cybersearch"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 rust-version = "1.88"
 description = "A Rust MCP server that aggregates multiple web search providers"
 license = "MIT"
 readme = "README.md"
-keywords = ["mcp", "search", "tavily", "exa", "firecrawl"]
+keywords = ["mcp", "search", "grok", "brave", "gemini"]
 categories = ["command-line-utilities", "web-programming"]
 
 [features]
@@ -22,6 +22,7 @@ http = [
 anyhow = "1"
 async-trait = "0.1"
 axum = { version = "0.8", optional = true }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 futures = "0.3"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "gzip", "brotli"] }
 rmcp = { version = "3.1.4", features = ["server", "transport-io", "macros"] }

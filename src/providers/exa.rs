@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 
 use crate::{
     ProviderConfig, Result, SearchResult,
-    model::ProviderSearchRequest,
+    model::{ProviderSearchOutput, ProviderSearchRequest},
     providers::{SearchProvider, common::send_json, filter_results},
 };
 
@@ -25,7 +25,7 @@ impl SearchProvider for ExaProvider {
         "exa"
     }
 
-    async fn search(&self, request: &ProviderSearchRequest) -> Result<Vec<SearchResult>> {
+    async fn search(&self, request: &ProviderSearchRequest) -> Result<ProviderSearchOutput> {
         let endpoint = format!("{}/search", self.config.base_url.trim_end_matches('/'));
         let body = json!({
             "query": request.query,
@@ -46,7 +46,10 @@ impl SearchProvider for ExaProvider {
                 .json(&body),
         )
         .await?;
-        Ok(filter_results(parse_results(&raw), request))
+        Ok(ProviderSearchOutput::new(filter_results(
+            parse_results(&raw),
+            request,
+        )))
     }
 }
 

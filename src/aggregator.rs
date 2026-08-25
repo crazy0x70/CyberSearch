@@ -132,7 +132,8 @@ impl CyberRouter {
         let mut success_count = 0;
         while let Some((order, name, elapsed_ms, result)) = tasks.next().await {
             match result {
-                Ok(items) => {
+                Ok(output) => {
+                    let items = output.results;
                     success_count += 1;
                     statuses.push((
                         order,
@@ -141,6 +142,7 @@ impl CyberRouter {
                             ok: true,
                             result_count: items.len(),
                             elapsed_ms,
+                            audit: output.audit,
                             error: None,
                         },
                     ));
@@ -157,6 +159,7 @@ impl CyberRouter {
                         ok: false,
                         result_count: 0,
                         elapsed_ms,
+                        audit: None,
                         error: Some(error.to_string()),
                     },
                 )),
@@ -187,13 +190,15 @@ impl CyberRouter {
             let provider = self.providers.get(name).expect("selected provider exists");
             let started = Instant::now();
             match provider.search(request).await {
-                Ok(items) => {
+                Ok(output) => {
+                    let items = output.results;
                     any_success = true;
                     statuses.push(ProviderStatus {
                         provider: name.clone(),
                         ok: true,
                         result_count: items.len(),
                         elapsed_ms: started.elapsed().as_millis() as u64,
+                        audit: output.audit,
                         error: None,
                     });
                     if !items.is_empty() {
@@ -215,6 +220,7 @@ impl CyberRouter {
                     ok: false,
                     result_count: 0,
                     elapsed_ms: started.elapsed().as_millis() as u64,
+                    audit: None,
                     error: Some(error.to_string()),
                 }),
             }
@@ -263,6 +269,6 @@ fn status_summary(statuses: &[ProviderStatus]) -> String {
 mod tests {
     #[test]
     fn all_provider_names_constant_is_complete() {
-        assert_eq!(crate::config::ALL_PROVIDERS.len(), 7);
+        assert_eq!(crate::config::ALL_PROVIDERS.len(), 8);
     }
 }

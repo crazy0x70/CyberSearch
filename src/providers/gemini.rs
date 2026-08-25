@@ -6,7 +6,7 @@ use serde_json::{Value, json};
 
 use crate::{
     CyberSearchError, ProviderConfig, Result, SearchResult,
-    model::ProviderSearchRequest,
+    model::{ProviderSearchOutput, ProviderSearchRequest},
     providers::{SearchProvider, common::send_json, filter_results},
 };
 
@@ -38,7 +38,7 @@ impl SearchProvider for GeminiProvider {
         "gemini"
     }
 
-    async fn search(&self, request: &ProviderSearchRequest) -> Result<Vec<SearchResult>> {
+    async fn search(&self, request: &ProviderSearchRequest) -> Result<ProviderSearchOutput> {
         let body = json!({
             "model": self.config.model.as_deref().unwrap_or("gemini-3.7-flash"),
             "input": grounded_prompt(request),
@@ -57,7 +57,10 @@ impl SearchProvider for GeminiProvider {
         )
         .await?;
         validate_response(&raw)?;
-        Ok(filter_results(parse_results(&raw), request))
+        Ok(ProviderSearchOutput::new(filter_results(
+            parse_results(&raw),
+            request,
+        )))
     }
 }
 

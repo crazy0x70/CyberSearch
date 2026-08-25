@@ -4,7 +4,7 @@ use serde_json::Value;
 
 use crate::{
     ProviderConfig, Result, SearchResult,
-    model::ProviderSearchRequest,
+    model::{ProviderSearchOutput, ProviderSearchRequest},
     providers::{SearchProvider, common::send_json, filter_results},
 };
 
@@ -25,7 +25,7 @@ impl SearchProvider for TinyFishProvider {
         "tinyfish"
     }
 
-    async fn search(&self, request: &ProviderSearchRequest) -> Result<Vec<SearchResult>> {
+    async fn search(&self, request: &ProviderSearchRequest) -> Result<ProviderSearchOutput> {
         let mut query = vec![("query", request.query.clone())];
         if !request.include_domains.is_empty() {
             query.push(("include_domains", request.include_domains.join(",")));
@@ -44,7 +44,10 @@ impl SearchProvider for TinyFishProvider {
                 .query(&query),
         )
         .await?;
-        Ok(filter_results(parse_results(&raw), request))
+        Ok(ProviderSearchOutput::new(filter_results(
+            parse_results(&raw),
+            request,
+        )))
     }
 }
 

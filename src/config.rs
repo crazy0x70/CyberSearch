@@ -2,9 +2,10 @@ use std::{collections::HashMap, env, time::Duration};
 
 use crate::error::{CyberSearchError, Result};
 
-pub const ALL_PROVIDERS: [&str; 7] = [
+pub const ALL_PROVIDERS: [&str; 8] = [
     "tavily",
     "exa",
+    "brave",
     "firecrawl",
     "tinyfish",
     "grok",
@@ -36,7 +37,6 @@ pub struct Config {
     pub provider_order: Vec<String>,
     pub timeout: Duration,
     pub grok_timeout: Duration,
-    pub grok_api_mode: String,
     pub default_limit: usize,
     pub max_limit: usize,
     pub default_mode: String,
@@ -46,22 +46,10 @@ pub struct Config {
 impl Config {
     pub fn from_env() -> Result<Self> {
         let timeout_secs = parse_usize("CYBERSEARCH_TIMEOUT_SECONDS", 30)?;
-        let grok_timeout_secs = parse_usize("GROK_TIMEOUT_SECONDS", 120)?;
+        let grok_timeout_secs = parse_usize("GROK_TIMEOUT_SECONDS", 180)?;
         if grok_timeout_secs == 0 {
             return Err(CyberSearchError::Config(
                 "GROK_TIMEOUT_SECONDS 必须大于 0".into(),
-            ));
-        }
-        let grok_api_mode = env::var("GROK_API_MODE")
-            .unwrap_or_else(|_| "auto".into())
-            .trim()
-            .to_ascii_lowercase();
-        if !matches!(
-            grok_api_mode.as_str(),
-            "auto" | "responses" | "chat_completions"
-        ) {
-            return Err(CyberSearchError::Config(
-                "GROK_API_MODE 仅支持 auto、responses 或 chat_completions".into(),
             ));
         }
         let default_limit = parse_usize("CYBERSEARCH_DEFAULT_LIMIT", 10)?;
@@ -105,6 +93,15 @@ impl Config {
             provider("exa", "EXA_API_KEY", "EXA_BASE_URL", "https://api.exa.ai"),
         );
         providers.insert(
+            "brave".into(),
+            provider(
+                "brave",
+                "BRAVE_API_KEY",
+                "BRAVE_BASE_URL",
+                "https://api.search.brave.com",
+            ),
+        );
+        providers.insert(
             "firecrawl".into(),
             provider(
                 "firecrawl",
@@ -140,7 +137,6 @@ impl Config {
             provider_order,
             timeout: Duration::from_secs(timeout_secs as u64),
             grok_timeout: Duration::from_secs(grok_timeout_secs as u64),
-            grok_api_mode,
             default_limit,
             max_limit,
             default_mode,
@@ -159,7 +155,6 @@ impl Config {
             provider_order,
             timeout: Duration::from_secs(3),
             grok_timeout: Duration::from_secs(3),
-            grok_api_mode: "auto".into(),
             default_limit: 10,
             max_limit: 30,
             default_mode: "parallel".into(),

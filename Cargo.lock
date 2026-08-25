@@ -313,11 +313,12 @@ dependencies = [
 
 [[package]]
 name = "cybersearch"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "chrono",
  "futures",
  "reqwest",
  "rmcp",

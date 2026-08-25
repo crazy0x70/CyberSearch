@@ -5,7 +5,7 @@ use url::Url;
 
 use crate::{
     CyberSearchError, ProviderConfig, Result, SearchResult,
-    model::ProviderSearchRequest,
+    model::{ProviderSearchOutput, ProviderSearchRequest},
     providers::{SearchProvider, filter_results},
 };
 
@@ -26,7 +26,7 @@ impl SearchProvider for DuckDuckGoProvider {
         "duckduckgo"
     }
 
-    async fn search(&self, request: &ProviderSearchRequest) -> Result<Vec<SearchResult>> {
+    async fn search(&self, request: &ProviderSearchRequest) -> Result<ProviderSearchOutput> {
         let endpoint = format!("{}/html/", self.config.base_url.trim_end_matches('/'));
         let response = self
             .client
@@ -75,7 +75,7 @@ impl SearchProvider for DuckDuckGoProvider {
                 "DuckDuckGo 返回了结果，但没有条目符合当前域名过滤条件",
             ));
         }
-        Ok(results)
+        Ok(ProviderSearchOutput::new(results))
     }
 }
 

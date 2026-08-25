@@ -78,7 +78,7 @@ impl CyberSearchServer {
 
 #[tool_handler(
     name = "cybersearch",
-    version = "0.0.1",
-    instructions = "聚合 Tavily、Exa、Firecrawl、TinyFish、Grok、Gemini 与 DuckDuckGo 的联网搜索 MCP 路由。"
+    version = "0.0.3",
+    instructions = "聚合 Tavily、Exa、Brave Search、Firecrawl、TinyFish、Grok、Gemini 与 DuckDuckGo 的联网搜索 MCP 路由。"
 )]
 impl ServerHandler for CyberSearchServer {}

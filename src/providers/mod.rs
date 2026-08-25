@@ -1,3 +1,4 @@
+mod brave;
 mod common;
 mod duckduckgo;
 mod exa;
@@ -15,7 +16,7 @@ use reqwest::Client;
 use crate::{
     config::Config,
     error::Result,
-    model::{ProviderInfo, ProviderSearchRequest, SearchResult},
+    model::{ProviderInfo, ProviderSearchOutput, ProviderSearchRequest},
 };
 
 pub(crate) use common::{filter_results, normalize_url};
@@ -23,7 +24,7 @@ pub(crate) use common::{filter_results, normalize_url};
 #[async_trait]
 pub trait SearchProvider: Send + Sync {
     fn name(&self) -> &'static str;
-    async fn search(&self, request: &ProviderSearchRequest) -> Result<Vec<SearchResult>>;
+    async fn search(&self, request: &ProviderSearchRequest) -> Result<ProviderSearchOutput>;
 }
 
 pub fn build_providers(config: &Config) -> Result<HashMap<String, Arc<dyn SearchProvider>>> {
@@ -52,6 +53,7 @@ pub fn build_providers(config: &Config) -> Result<HashMap<String, Arc<dyn Search
         let provider: Arc<dyn SearchProvider> = match item.name {
             "tavily" => Arc::new(tavily::TavilyProvider::new(client.clone(), item.clone())),
             "exa" => Arc::new(exa::ExaProvider::new(client.clone(), item.clone())),
+            "brave" => Arc::new(brave::BraveProvider::new(client.clone(), item.clone())),
             "firecrawl" => Arc::new(firecrawl::FirecrawlProvider::new(
                 client.clone(),
                 item.clone(),
@@ -60,11 +62,7 @@ pub fn build_providers(config: &Config) -> Result<HashMap<String, Arc<dyn Search
                 client.clone(),
                 item.clone(),
             )),
-            "grok" => Arc::new(grok::GrokProvider::new(
-                grok_client.clone(),
-                item.clone(),
-                &config.grok_api_mode,
-            )),
+            "grok" => Arc::new(grok::GrokProvider::new(grok_client.clone(), item.clone())),
             "gemini" => Arc::new(gemini::GeminiProvider::new(client.clone(), item.clone())),
             "duckduckgo" => Arc::new(duckduckgo::DuckDuckGoProvider::new(
                 client.clone(),

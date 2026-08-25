@@ -12,8 +12,8 @@ pub type SearchAggregator = CyberRouter;
 pub use config::{Config, ProviderConfig};
 pub use error::{CyberSearchError, Result};
 pub use model::{
-    AggregateSearchResponse, FusionDiagnostics, ProviderInfo, ProviderStatus, SearchInput,
-    SearchMode, SearchResult,
+    AggregateSearchResponse, FusionDiagnostics, ProviderInfo, ProviderSearchOutput, ProviderStatus,
+    SearchAudit, SearchInput, SearchMode, SearchResult,
 };
 pub use providers::{SearchProvider, build_providers};
 pub use server::CyberSearchServer;

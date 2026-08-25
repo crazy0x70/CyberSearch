@@ -69,8 +69,19 @@ pub struct ProviderStatus {
     pub ok: bool,
     pub result_count: usize,
     pub elapsed_ms: u64,
+    /// 上游检索协议与工具调用证据；仅在供应商能返回可验证记录时存在。
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub audit: Option<SearchAudit>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SearchAudit {
+    pub protocol: String,
+    pub tool: String,
+    pub tool_calls: u64,
+    pub evidence_url_count: usize,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq)]
@@ -117,4 +128,26 @@ pub struct ProviderSearchRequest {
     pub limit: usize,
     pub include_domains: Vec<String>,
     pub exclude_domains: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ProviderSearchOutput {
+    pub results: Vec<SearchResult>,
+    pub audit: Option<SearchAudit>,
+}
+
+impl ProviderSearchOutput {
+    pub fn new(results: Vec<SearchResult>) -> Self {
+        Self {
+            results,
+            audit: None,
+        }
+    }
+
+    pub fn audited(results: Vec<SearchResult>, audit: SearchAudit) -> Self {
+        Self {
+            results,
+            audit: Some(audit),
+        }
+    }
 }

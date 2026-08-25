@@ -2,7 +2,7 @@ use cybersearch::{Config, CyberRouter, ProviderConfig, SearchInput, SearchMode, 
 use serde_json::json;
 use wiremock::{
     Mock, MockServer, ResponseTemplate,
-    matchers::{body_partial_json, body_string_contains, header, method, path},
+    matchers::{body_partial_json, body_string_contains, header, method, path, query_param},
 };
 
 fn provider(name: &'static str, base_url: String) -> ProviderConfig {
@@ -214,6 +214,52 @@ async fn duckduckgo_challenge_is_not_reported_as_success() {
 }
 
 #[tokio::test]
+async fn brave_search_calls_web_endpoint_and_parses_results() {
+    let brave = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/res/v1/web/search"))
+        .and(header("x-subscription-token", "brave-secret"))
+        .and(query_param("q", "Rust official website"))
+        .and(query_param("count", "6"))
+        .and(query_param("result_filter", "web"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "type": "search",
+            "web": {"results": [{
+                "title": "The Rust Programming Language",
+                "url": "https://www.rust-lang.org/",
+                "description": "Official Rust website",
+                "age": "2026-08-25T01:02:03.000Z"
+            }]}
+        })))
+        .expect(1)
+        .mount(&brave)
+        .await;
+
+    let config = Config::for_test(vec![provider("brave", brave.uri())]);
+    let router = CyberRouter::new(&config, build_providers(&config).unwrap());
+    let response = router
+        .search(SearchInput {
+            query: "Rust official website".into(),
+            max_results: Some(3),
+            providers: Some(vec!["brave".into()]),
+            mode: Some(SearchMode::Fallback),
+            include_domains: Vec::new(),
+            exclude_domains: Vec::new(),
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(response.results.len(), 1);
+    assert_eq!(response.results[0].providers, ["brave"]);
+    assert_eq!(response.results[0].url, "https://www.rust-lang.org/");
+    assert_eq!(
+        response.results[0].published_at.as_deref(),
+        Some("2026-08-25T01:02:03.000Z")
+    );
+}
+
+#[tokio::test]
 async fn grok_search_calls_responses_api_and_returns_cited_sources() {
     let grok = MockServer::start().await;
 
@@ -223,6 +269,10 @@ async fn grok_search_calls_responses_api_and_returns_cited_sources() {
         .and(body_partial_json(json!({
             "model": "grok-4.6",
             "tools": [{"type": "web_search"}],
+            "tool_choice": "required",
+            "max_turns": 3,
+            "stream": false,
+            "store": false,
             "include": ["web_search_call.action.sources"]
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
@@ -247,8 +297,7 @@ async fn grok_search_calls_responses_api_and_returns_cited_sources() {
 
     let mut grok_config = provider("grok", grok.uri());
     grok_config.model = Some("grok-4.6".into());
-    let mut config = Config::for_test(vec![grok_config]);
-    config.grok_api_mode = "responses".into();
+    let config = Config::for_test(vec![grok_config]);
     let router = CyberRouter::new(&config, build_providers(&config).unwrap());
     let response = router
         .search(SearchInput {
@@ -271,29 +320,34 @@ async fn grok_search_calls_responses_api_and_returns_cited_sources() {
     );
     assert_eq!(response.fusion.pipeline, "first_healthy_v1");
     assert_eq!(response.fusion.received_candidates, 1);
+    let audit = response.providers[0].audit.as_ref().unwrap();
+    assert_eq!(audit.protocol, "xai_responses");
+    assert_eq!(audit.tool, "web_search");
+    assert_eq!(audit.tool_calls, 1);
+    assert_eq!(audit.evidence_url_count, 1);
 }
 
 #[tokio::test]
-async fn grok_third_party_gateway_uses_chat_completions() {
+async fn grok_rejects_knowledge_only_responses_without_search_audit() {
     let grok = MockServer::start().await;
 
     Mock::given(method("POST"))
-        .and(path("/v1/chat/completions"))
+        .and(path("/v1/responses"))
         .and(header("authorization", "Bearer grok-secret"))
         .and(body_partial_json(json!({
             "model": "grok-4.6",
-            "stream": false,
-            "messages": [
-                {"role": "system"},
-                {"role": "user", "content": "BBC World latest news"}
-            ]
+            "tools": [{"type": "web_search"}],
+            "tool_choice": "required"
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "object": "chat.completion",
-            "choices": [{
-                "message": {
-                    "content": "Latest report.\n\nSources\n- [BBC World](https://www.bbc.com/news/world)"
-                }
+            "object": "response",
+            "status": "completed",
+            "output": [{
+                "type": "message",
+                "content": [{
+                    "type": "output_text",
+                    "text": "A memory-only answer with https://www.bbc.com/news/world"
+                }]
             }]
         })))
         .expect(1)
@@ -304,7 +358,7 @@ async fn grok_third_party_gateway_uses_chat_completions() {
     grok_config.model = Some("grok-4.6".into());
     let config = Config::for_test(vec![grok_config]);
     let router = CyberRouter::new(&config, build_providers(&config).unwrap());
-    let response = router
+    let error = router
         .search(SearchInput {
             query: "BBC World latest news".into(),
             max_results: Some(3),
@@ -314,12 +368,10 @@ async fn grok_third_party_gateway_uses_chat_completions() {
             exclude_domains: Vec::new(),
         })
         .await
-        .unwrap();
+        .unwrap_err();
 
-    assert_eq!(response.results.len(), 1);
-    assert_eq!(response.results[0].title, "BBC World");
-    assert_eq!(response.results[0].url, "https://www.bbc.com/news/world");
-    assert_eq!(response.results[0].providers, ["grok"]);
+    assert!(error.to_string().contains("web_search_call"));
+    assert!(error.to_string().contains("拒绝"));
 }
 
 #[tokio::test]
