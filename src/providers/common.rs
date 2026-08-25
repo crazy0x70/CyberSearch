@@ -8,10 +8,18 @@ use crate::{
 };
 
 pub async fn send_json(provider: &str, request: RequestBuilder) -> Result<Value> {
-    let response = request
-        .send()
-        .await
-        .map_err(|error| CyberSearchError::provider(provider, error.to_string()))?;
+    let response = request.send().await.map_err(|error| {
+        let category = if error.is_timeout() {
+            "请求超时"
+        } else if error.is_connect() {
+            "连接失败"
+        } else if error.is_request() {
+            "请求构建或发送失败"
+        } else {
+            "HTTP 请求失败"
+        };
+        CyberSearchError::provider(provider, format!("{category}: {error}"))
+    })?;
     decode_json(provider, response).await
 }
 
@@ -22,6 +30,23 @@ async fn decode_json(provider: &str, response: Response) -> Result<Value> {
         .await
         .map_err(|error| CyberSearchError::provider(provider, error.to_string()))?;
     if !status.is_success() {
+        if provider == "gemini" && status.as_u16() == 429 {
+            let message = serde_json::from_str::<Value>(&text)
+                .ok()
+                .and_then(|body| {
+                    body.pointer("/error/message")
+                        .and_then(Value::as_str)
+                        .map(str::to_owned)
+                })
+                .unwrap_or_else(|| truncate(&text, 400));
+            return Err(CyberSearchError::provider(
+                provider,
+                format!(
+                    "HTTP 429 RESOURCE_EXHAUSTED：Gemini API 所属 Google Cloud 项目的可用配额已耗尽；请在 Google AI Studio 检查该项目的 RPM/TPM/RPD 与计费状态。上游消息: {}",
+                    truncate(&message, 400)
+                ),
+            ));
+        }
         return Err(CyberSearchError::provider(
             provider,
             format!("HTTP {}: {}", status.as_u16(), truncate(&text, 400)),

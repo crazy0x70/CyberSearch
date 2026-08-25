@@ -1,6 +1,6 @@
 [package]
 name = "cybersearch"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 rust-version = "1.88"
 description = "A Rust MCP server that aggregates multiple web search providers"
@@ -23,7 +23,7 @@ anyhow = "1"
 async-trait = "0.1"
 axum = { version = "0.8", optional = true }
 futures = "0.3"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "gzip", "brotli"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "gzip", "brotli"] }
 rmcp = { version = "3.1.4", features = ["server", "transport-io", "macros"] }
 schemars = "1"
 scraper = "0.24"

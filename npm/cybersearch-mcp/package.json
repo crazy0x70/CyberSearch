@@ -1,6 +1,6 @@
 {
   "name": "cybersearch-mcp",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Prebuilt CyberSearch MCP server for aggregated web search",
   "license": "MIT",
   "keywords": [
@@ -39,11 +39,11 @@
     "access": "public"
   },
   "optionalDependencies": {
-    "cybersearch-mcp-darwin-x64": "0.0.1",
-    "cybersearch-mcp-darwin-arm64": "0.0.1",
-    "cybersearch-mcp-linux-x64": "0.0.1",
-    "cybersearch-mcp-linux-arm64": "0.0.1",
-    "cybersearch-mcp-win32-x64": "0.0.1",
-    "cybersearch-mcp-win32-arm64": "0.0.1"
+    "cybersearch-mcp-darwin-x64": "0.0.2",
+    "cybersearch-mcp-darwin-arm64": "0.0.2",
+    "cybersearch-mcp-linux-x64": "0.0.2",
+    "cybersearch-mcp-linux-arm64": "0.0.2",
+    "cybersearch-mcp-win32-x64": "0.0.2",
+    "cybersearch-mcp-win32-arm64": "0.0.2"
   }
 }

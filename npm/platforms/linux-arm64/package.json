@@ -1,11 +1,20 @@
 {
   "name": "cybersearch-mcp-linux-arm64",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "CyberSearch native binary for Linux arm64",
   "license": "MIT",
-  "os": ["linux"],
-  "cpu": ["arm64"],
-  "files": ["bin/cybersearch", "LICENSE"],
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin/cybersearch",
+    "LICENSE"
+  ],
   "preferUnplugged": true,
-  "publishConfig": {"access": "public"}
+  "publishConfig": {
+    "access": "public"
+  }
 }

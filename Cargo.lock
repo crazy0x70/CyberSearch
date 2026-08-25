@@ -313,7 +313,7 @@ dependencies = [
 
 [[package]]
 name = "cybersearch"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1400,6 +1400,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "futures-core",
+ "h2",
  "http",
  "http-body",
  "http-body-util",

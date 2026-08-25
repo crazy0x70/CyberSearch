@@ -27,12 +27,19 @@ pub trait SearchProvider: Send + Sync {
 }
 
 pub fn build_providers(config: &Config) -> Result<HashMap<String, Arc<dyn SearchProvider>>> {
-    let client = Client::builder()
-        .timeout(config.timeout)
-        .user_agent(&config.user_agent)
-        .redirect(reqwest::redirect::Policy::limited(5))
-        .build()
-        .map_err(|error| crate::CyberSearchError::Config(format!("HTTP client: {error}")))?;
+    let build_client = |timeout| {
+        Client::builder()
+            .timeout(timeout)
+            .user_agent(&config.user_agent)
+            .redirect(reqwest::redirect::Policy::limited(5))
+            .build()
+            .map_err(|error| crate::CyberSearchError::Config(format!("HTTP client: {error}")))
+    };
+    let client = build_client(config.timeout)?;
+    // Grok-compatible gateways can spend considerably longer on live browsing
+    // before returning response headers. Keep that latency isolated from the
+    // faster search providers instead of raising their shared timeout.
+    let grok_client = build_client(config.grok_timeout)?;
 
     let mut providers: HashMap<String, Arc<dyn SearchProvider>> = HashMap::new();
     for name in &config.provider_order {
@@ -53,7 +60,11 @@ pub fn build_providers(config: &Config) -> Result<HashMap<String, Arc<dyn Search
                 client.clone(),
                 item.clone(),
             )),
-            "grok" => Arc::new(grok::GrokProvider::new(client.clone(), item.clone())),
+            "grok" => Arc::new(grok::GrokProvider::new(
+                grok_client.clone(),
+                item.clone(),
+                &config.grok_api_mode,
+            )),
             "gemini" => Arc::new(gemini::GeminiProvider::new(client.clone(), item.clone())),
             "duckduckgo" => Arc::new(duckduckgo::DuckDuckGoProvider::new(
                 client.clone(),

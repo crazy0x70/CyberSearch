@@ -30,8 +30,17 @@ impl SearchProvider for DuckDuckGoProvider {
         let endpoint = format!("{}/html/", self.config.base_url.trim_end_matches('/'));
         let response = self
             .client
-            .get(endpoint)
-            .query(&[("q", &request.query)])
+            .post(endpoint)
+            .form(&[("q", request.query.as_str()), ("b", "")])
+            .header("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+            .header("accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+            .header("accept-language", "en-US,en;q=0.9")
+            .header("sec-fetch-dest", "document")
+            .header("sec-fetch-mode", "navigate")
+            .header("sec-fetch-site", "same-origin")
+            .header("sec-fetch-user", "?1")
+            .header("referer", "https://html.duckduckgo.com/")
+            .header("cookie", "kl=wt-wt")
             .send()
             .await
             .map_err(|error| CyberSearchError::provider(self.name(), error.to_string()))?;
@@ -46,8 +55,35 @@ impl SearchProvider for DuckDuckGoProvider {
                 format!("HTTP {}", status.as_u16()),
             ));
         }
-        Ok(filter_results(parse_html(&html), request))
+        if status.as_u16() == 202 || is_bot_challenge(&html) {
+            return Err(CyberSearchError::provider(
+                self.name(),
+                "DuckDuckGo 返回了反自动化验证页，未获得搜索结果",
+            ));
+        }
+        let parsed = parse_html(&html);
+        if parsed.is_empty() {
+            return Err(CyberSearchError::provider(
+                self.name(),
+                "DuckDuckGo 请求成功，但页面中没有可解析的搜索结果",
+            ));
+        }
+        let results = filter_results(parsed, request);
+        if results.is_empty() {
+            return Err(CyberSearchError::provider(
+                self.name(),
+                "DuckDuckGo 返回了结果，但没有条目符合当前域名过滤条件",
+            ));
+        }
+        Ok(results)
     }
+}
+
+fn is_bot_challenge(html: &str) -> bool {
+    let lowercase = html.to_ascii_lowercase();
+    lowercase.contains("id=\"challenge-form\"")
+        || lowercase.contains("name=\"challenge-form\"")
+        || lowercase.contains("duckduckgo.com/anomaly.js")
 }
 
 fn parse_html(html: &str) -> Vec<SearchResult> {
@@ -83,6 +119,8 @@ fn parse_html(html: &str) -> Vec<SearchResult> {
 fn decode_redirect(href: &str) -> Option<String> {
     let absolute = if href.starts_with("//") {
         format!("https:{href}")
+    } else if href.starts_with('/') {
+        format!("https://duckduckgo.com{href}")
     } else {
         href.to_string()
     };
@@ -111,5 +149,20 @@ mod tests {
         let item = parse_html(html).remove(0);
         assert_eq!(item.url, "https://example.com/docs");
         assert_eq!(item.snippet.as_deref(), Some("A useful result"));
+    }
+
+    #[test]
+    fn decodes_relative_redirects() {
+        assert_eq!(
+            decode_redirect("/l/?uddg=https%3A%2F%2Fexample.com%2Fdocs").as_deref(),
+            Some("https://example.com/docs")
+        );
+    }
+
+    #[test]
+    fn detects_bot_challenge_page() {
+        assert!(is_bot_challenge(
+            r#"<form id="challenge-form" action="//duckduckgo.com/anomaly.js"></form>"#
+        ));
     }
 }
