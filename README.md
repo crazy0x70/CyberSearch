@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/cybersearch-mcp"><img src="https://img.shields.io/npm/v/cybersearch-mcp?color=crimson&label=npm%20package" alt="npm version"></a>
-  <a href="https://github.com/crazy0x70/CyberSearch/releases"><img src="https://img.shields.io/github/v/release/your-repo/CyberSearch?color=blue" alt="Latest Release"></a>
+  <a href="https://github.com/crazy0x70/CyberSearch/releases"><img src="https://img.shields.io/github/v/release/crazy0x70/CyberSearch?color=blue" alt="Latest Release"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/Rust-1.88%2B-orange.svg" alt="Rust 1.88+">
   <img src="https://img.shields.io/badge/MCP-Standard%20Compatible-purple.svg" alt="MCP Compatible">
